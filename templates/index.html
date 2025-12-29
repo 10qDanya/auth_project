@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="app-continer">
+        <div class="header">
+            <h1>Color Changer</h1>
+            <div class="user-info">
+                <span id="username"></span>
+                <button onclick="logout()" class="logout-btn">Выйти</button>
+            </div>
+        </div>
+
+        <div class='main-content'>
+            <div class="color-info" id="colorinfo">
+                <p>Ожидание  данных...</p>
+            </div>
+
+            <button onclick="changeColor()" class="color-btn">
+                Сменить цвет фона
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentColor = '#FFFFFF'
+
+        async function fetchWikiAuth(url, options = {}) {
+            let accessToken = localStorage.getItem('access_token')
+
+            if (!options.headers) {
+                options.headers = {};
+            }
+
+            options.headers['Authorization'] = `Bearer ${accessToken}`;
+            options.headers['Content-Type'] = 'application/json';
+
+            let response = await fetch(url, options);
+
+            if (response.status === 401){
+                const refreshToken = localStorage.getItem('refresh_token');
+                const refreshResponse = await fetch('/api/token/refresh', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ refresh: refreshToken })
+                });
+
+                if (refreshResponse.ok){
+                    const tokens = await refreshResponse.json();
+                    localStorage.setItem('access_token', tokens.access);
+                    localStorage.setItem('refresh_token', tokens.refresh || refreshToken);
+
+                    options.headers['Authorization'] = `Bearer ${tokens.access}`;
+                    response = await fetch(url, options);
+                }else{
+                    logout();
+                    return null;
+                }
+            }
+            return response;
+        }
+        async function loadUserInfo(){
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            document.getElementById('username').text.container = user.username || 'Пользователь';
+        }
+        async function loadLastColor(){
+            try {
+                const response = await fetchWikiAuth('/api/color/');
+                if (response && response.ok) {
+                    const data = await response.json();
+                    if (data){
+                        currentColor = data.color;
+                        document.body.style.backgroundColor = currentColor;
+                        document.getElementById('colorinfo').innerHTML = `
+                        <h3>Последнее изменение:</h3>
+                        <p>Пользователь: <strong>${data.username}</strong></p>
+                        <p>Цвет: <span style="color:${data.color}">${data.color}</span></p>
+                        <p>Время: ${data.timestamp}</p>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки цвета:', error);
+            }
+        }
+        
+        async function changeColor(){
+            try {
+                const response = await fetchWikiAuth('/api/color/', {
+                    method: 'POST'
+                });
+                
+                if (response && response.ok) {
+                    const data = await response.json();
+                    currentColor = data.color;
+                    document.body.style.backgroundColor = currentColor;
+
+                    if (data.last_change) {
+                        document.getElementById('colorInfo').innerHTML = `
+                            <h3>Последнее изменение:</h3>
+                            <p>Пользователь: <strong>${data.last_change.username}</strong></p>
+                            <p>Цвет: <span style="color:${data.last_change.color}">${data.last_change.color}</span></p>
+                            <p>Время: ${data.last_change.timestamp}</p>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка смены цвета:', error);
+            }
+        }
+        function logout(){
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+            window.location.href = '/login/';
+        }
+
+        document.addEventListener('DOMContentLoaded', async() => {
+            const accessToken = localStorage.getItem('access_token');
+
+            if (!accessToken){
+                window.location.href = '/login/';
+                return;
+            }
+
+            await loadUserInfo();
+            await loadLastColor();
+        });
+    </script>
+{% endblock  %}
