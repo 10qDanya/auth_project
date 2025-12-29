@@ -21,3 +21,11 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data.get('email', '')
         )
         return user
+
+
+class ColorChangeSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = ColorChange
+        fields = ['id', 'user', 'username', 'color', 'created_at']
